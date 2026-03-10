@@ -33,7 +33,7 @@ async function askGroq(userMessage, context = "general") {
 
   // ── Read key here (not at module load) so dotenv is guaranteed to have run ──
   const GROQ_API_KEY = process.env.GROQ_API_KEY;
-  const GROQ_MODEL   = process.env.GROQ_MODEL || "llama3-8b-8192";
+  const GROQ_MODEL   = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
   // ── Diagnose missing key immediately ──────────────────────────────────────
   if (!GROQ_API_KEY || GROQ_API_KEY.trim() === "" || GROQ_API_KEY === "your_groq_api_key_here") {
