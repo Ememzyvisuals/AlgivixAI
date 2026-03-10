@@ -42,7 +42,7 @@ const {
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("AlgivixAI is running 24/7 ✅\nDeveloped by EMEMZYVISUALS DIGITALS");
+  res.end("OK");
 }).listen(PORT, () => console.log(`[HTTP] Keep-alive server on port ${PORT}`));
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -257,6 +257,13 @@ async function onMessage(msg) {
 
     // ── GROUP MESSAGES ────────────────────────────────────────────────────────
     if (isGroup) {
+
+      // Option A: Only respond in TARGET_GROUP — ignore all other groups
+      if (TARGET_GROUP && jid !== TARGET_GROUP) {
+        console.log(`[Bot] Ignored non-target group: ${jid}`);
+        return;
+      }
+
       lastGroupMessage = Date.now(); // reset inactivity timer
 
       const adminUser = await isAdmin(jid, senderJid);
