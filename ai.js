@@ -64,7 +64,7 @@ function httpsPost(host, path, data, headers) {
 async function askGroq(userMessage, context = "general", retrying = false) {
   // Read key fresh every call — ensures dotenv has loaded
   const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").trim();
-  const GROQ_MODEL   = (process.env.GROQ_MODEL   || "llama3-8b-8192").trim();
+  const GROQ_MODEL   = (process.env.GROQ_MODEL   || "openai/gpt-oss-120b").trim();
 
   // ── Validate key ────────────────────────────────────────────────────────────
   if (!GROQ_API_KEY || GROQ_API_KEY === "your_groq_api_key_here") {
