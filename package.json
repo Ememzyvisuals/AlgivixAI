@@ -1,0 +1,26 @@
+{
+  "name": "algivix-ai-bot",
+  "version": "1.0.0",
+  "description": "AlgivixAI - WhatsApp AI Bot for Algivix Dev Team",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "EMEMZYVISUALS DIGITALS",
+  "license": "MIT"
+}
