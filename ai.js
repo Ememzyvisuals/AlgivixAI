@@ -2,115 +2,188 @@
  * ai.js - AlgivixAI Groq API Handler
  * Developer: EMEMZYVISUALS DIGITALS
  *
- * FIX: API key is now read inside the function (not at module load time)
- * so dotenv always has time to populate process.env first.
+ * HARDENED VERSION:
+ * - API key read inside function (never at module load)
+ * - Full error logging with exact HTTP status
+ * - Automatic retry once on timeout/network error
+ * - Never throws — always returns a safe string
  */
 
-const axios = require("axios");
+const https = require("https"); // Use built-in https — no axios dependency issue
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_API_URL = "api.groq.com";
+const GROQ_PATH    = "/openai/v1/chat/completions";
 
-const SYSTEM_PROMPT = `You are AlgivixAI, a professional AI assistant for the Algivix Dev Team on WhatsApp.
+const SYSTEM_PROMPT =
+  `You are AlgivixAI, a professional AI assistant for the Algivix Dev Team on WhatsApp.\n` +
+  `Rules:\n` +
+  `- Answer developer questions clearly and concisely\n` +
+  `- Review code: find bugs, suggest improvements, mention best practices\n` +
+  `- Debug errors: explain root cause and provide fix\n` +
+  `- Be encouraging and supportive to all skill levels\n` +
+  `- Keep responses under 400 words — WhatsApp readable\n` +
+  `- Use plain text only, no markdown symbols like ** or ##\n` +
+  `- If asked who created you: "I was developed by EMEMZYVISUALS DIGITALS — a talented AI automation developer!"`;
 
-Your role:
-- Answer developer questions clearly and concisely
-- Review code and suggest improvements with explanations
-- Debug errors and explain the root cause
-- Recommend best practices, tools, and learning resources
-- Be encouraging and supportive to all skill levels
+// ─── Raw HTTPS request (no axios — eliminates dependency failures) ─────────────
+function httpsPost(host, path, data, headers) {
+  return new Promise((resolve, reject) => {
+    const body    = JSON.stringify(data);
+    const options = {
+      hostname: host,
+      path,
+      method:  "POST",
+      headers: {
+        ...headers,
+        "Content-Type":   "application/json",
+        "Content-Length": Buffer.byteLength(body),
+      },
+      timeout: 25000,
+    };
 
-Tone: Friendly, professional, technical, encouraging.
-Format: Keep responses under 500 words. Use plain text — no markdown (WhatsApp does not render it).
-If asked who created you: "I was developed by EMEMZYVISUALS DIGITALS — a talented AI automation developer! 🚀"`;
+    const req = https.request(options, (res) => {
+      let raw = "";
+      res.on("data", chunk => { raw += chunk; });
+      res.on("end", () => {
+        resolve({ status: res.statusCode, body: raw });
+      });
+    });
 
-/**
- * Ask Groq AI a question and return the response text.
- * @param {string} userMessage
- * @param {string} context - "general" | "code_review" | "debug"
- * @returns {Promise<string>}
- */
-async function askGroq(userMessage, context = "general") {
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("TIMEOUT"));
+    });
 
-  // ── Read key here (not at module load) so dotenv is guaranteed to have run ──
-  const GROQ_API_KEY = process.env.GROQ_API_KEY;
-  const GROQ_MODEL   = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+    req.on("error", (err) => reject(err));
+    req.write(body);
+    req.end();
+  });
+}
 
-  // ── Diagnose missing key immediately ──────────────────────────────────────
-  if (!GROQ_API_KEY || GROQ_API_KEY.trim() === "" || GROQ_API_KEY === "your_groq_api_key_here") {
-    console.error("[AI] ❌ GROQ_API_KEY is missing or not set in environment variables!");
-    return "⚠️ AI is not configured yet. Please set GROQ_API_KEY in your environment variables.";
+// ─── Main Groq Function ───────────────────────────────────────────────────────
+async function askGroq(userMessage, context = "general", retrying = false) {
+  // Read key fresh every call — ensures dotenv has loaded
+  const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").trim();
+  const GROQ_MODEL   = (process.env.GROQ_MODEL   || "llama3-8b-8192").trim();
+
+  // ── Validate key ────────────────────────────────────────────────────────────
+  if (!GROQ_API_KEY || GROQ_API_KEY === "your_groq_api_key_here") {
+    console.error("[AI] ❌ GROQ_API_KEY is missing or placeholder — set it in Render environment!");
+    return "⚠️ AI is not configured. Admin needs to set GROQ_API_KEY in environment variables.";
   }
 
-  // ── Build context-aware prompt ────────────────────────────────────────────
+  // ── Build prompt ────────────────────────────────────────────────────────────
   let prompt = userMessage;
   if (context === "code_review") {
-    prompt = `Review this code. Point out bugs, improvements, and best practices:\n\n${userMessage}`;
+    prompt = `Review this code. List bugs, improvements, and best practices:\n\n${userMessage}`;
   } else if (context === "debug") {
-    prompt = `Help debug this. Explain the cause and provide a fix:\n\n${userMessage}`;
+    prompt = `Debug this issue. Explain the cause and give a fix:\n\n${userMessage}`;
   }
 
+  // ── Call Groq ───────────────────────────────────────────────────────────────
   try {
-    console.log(`[AI] Calling Groq (model: ${GROQ_MODEL}, context: ${context})...`);
+    console.log(`[AI] Calling Groq | model: ${GROQ_MODEL} | context: ${context} | retry: ${retrying}`);
 
-    const response = await axios.post(
+    const { status, body } = await httpsPost(
       GROQ_API_URL,
+      GROQ_PATH,
       {
-        model: GROQ_MODEL,
-        messages: [
+        model:       GROQ_MODEL,
+        messages:    [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user",   content: prompt },
         ],
-        max_tokens:  800,
+        max_tokens:  600,
         temperature: 0.7,
       },
-      {
-        headers: {
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
-          "Content-Type":  "application/json",
-        },
-        timeout: 30000,
-      }
+      { Authorization: `Bearer ${GROQ_API_KEY}` }
     );
 
-    const reply = response.data?.choices?.[0]?.message?.content?.trim();
-    console.log("[AI] ✅ Groq responded successfully");
-    return reply || "🤖 No response generated. Please try again.";
+    // ── Parse response ────────────────────────────────────────────────────────
+    let parsed;
+    try { parsed = JSON.parse(body); }
+    catch { 
+      console.error("[AI] ❌ Could not parse Groq response:", body.slice(0, 200));
+      return "🚨 AI returned an unreadable response. Please try again.";
+    }
 
-  } catch (error) {
-    // ── Detailed error logging so you can see exactly what went wrong ────────
-    const status  = error.response?.status;
-    const errBody = error.response?.data?.error?.message || error.message;
+    // ── Handle HTTP errors ────────────────────────────────────────────────────
+    if (status === 401) {
+      console.error("[AI] ❌ HTTP 401 — Invalid API key");
+      return "⚠️ Invalid Groq API key. Please update GROQ_API_KEY in Render environment variables.";
+    }
+    if (status === 429) {
+      console.error("[AI] ⏳ HTTP 429 — Rate limited");
+      return "⏳ AI is rate-limited. Please wait 30 seconds and try again.";
+    }
+    if (status === 400) {
+      const errMsg = parsed?.error?.message || "bad request";
+      console.error("[AI] ❌ HTTP 400 —", errMsg);
+      return `⚠️ AI request error: ${errMsg}`;
+    }
+    if (status === 503 || status === 502) {
+      console.error(`[AI] ❌ HTTP ${status} — Groq service down`);
+      if (!retrying) {
+        console.log("[AI] Retrying in 3 seconds...");
+        await new Promise(r => setTimeout(r, 3000));
+        return askGroq(userMessage, context, true);
+      }
+      return "🔧 Groq AI is temporarily down. Please try again in a few minutes.";
+    }
+    if (status !== 200) {
+      console.error(`[AI] ❌ HTTP ${status} — Unexpected:`, body.slice(0, 200));
+      return `🚨 AI error (code ${status}). Please try again.`;
+    }
 
-    console.error(`[AI] ❌ Groq API error — HTTP ${status || "N/A"}: ${errBody}`);
+    // ── Extract reply ─────────────────────────────────────────────────────────
+    const reply = parsed?.choices?.[0]?.message?.content?.trim();
+    if (!reply) {
+      console.error("[AI] ❌ Empty reply from Groq:", body.slice(0, 200));
+      return "🤖 AI returned an empty response. Please rephrase your question.";
+    }
 
-    if (status === 401) return "⚠️ Invalid Groq API key. Please check GROQ_API_KEY in your environment variables.";
-    if (status === 429) return "⏳ AI rate limit reached. Please wait a moment and try again.";
-    if (status === 400) return `⚠️ Bad request to AI: ${errBody}`;
-    if (status === 503) return "🔧 Groq AI is temporarily unavailable. Try again shortly.";
-    if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") return "⏱️ AI request timed out. Please try again.";
-    if (error.code === "ENOTFOUND" || error.code === "EAI_AGAIN") return "🌐 No internet connection. Please check the server network.";
+    console.log(`[AI] ✅ Success — ${reply.length} chars returned`);
+    return reply;
 
-    return `🚨 AI error (${status || error.code || "unknown"}). Check server logs for details.`;
+  } catch (err) {
+    // ── Network / timeout errors ──────────────────────────────────────────────
+    console.error("[AI] ❌ Network error:", err.message);
+
+    if (err.message === "TIMEOUT" || err.code === "ECONNRESET") {
+      if (!retrying) {
+        console.log("[AI] Retrying after timeout...");
+        await new Promise(r => setTimeout(r, 3000));
+        return askGroq(userMessage, context, true);
+      }
+      return "⏱️ AI request timed out twice. Please try a shorter question.";
+    }
+
+    if (err.code === "ENOTFOUND" || err.code === "EAI_AGAIN") {
+      return "🌐 Cannot reach Groq AI — check server internet connection.";
+    }
+
+    return `🚨 AI failed (${err.code || err.message}). Please try again.`;
   }
 }
 
-/**
- * Detect if a message looks like a code snippet.
- * Used to auto-switch to code_review context.
- */
+// ─── Code Detection ───────────────────────────────────────────────────────────
 function looksLikeCode(text) {
-  return [
-    /```[\s\S]*```/,
-    /function\s+\w+\s*\(/,
-    /const\s+\w+\s*=/,
-    /import\s+\S+\s+from\s+/,
-    /def\s+\w+\s*\(/,
-    /class\s+\w+[\s:{]/,
-    /<\/?[a-z][\w]*[\s/>]/i,
-    /SELECT\s+\S+\s+FROM\s+/i,
-    /console\.log\s*\(/,
-    /=>\s*{/,
-  ].some(p => p.test(text));
+  try {
+    return [
+      /```[\s\S]*```/,
+      /function\s+\w+\s*\(/,
+      /const\s+\w+\s*=/,
+      /import\s+\S+\s+from\s+/,
+      /def\s+\w+\s*\(/,
+      /class\s+\w+[\s:{]/,
+      /<\/?[a-z][\w]*[\s/>]/i,
+      /SELECT\s+\S+\s+FROM\s+/i,
+      /console\.log\s*\(/,
+      /=>\s*{/,
+      /\$\w+\s*=/,
+      /public\s+(static\s+)?void\s+/,
+    ].some(p => p.test(text));
+  } catch { return false; }
 }
 
 module.exports = { askGroq, looksLikeCode };
