@@ -1,250 +1,215 @@
 /**
  * commands.js - AlgivixAI Command Handler
- * Processes all bot commands and generates responses
  * Developer: EMEMZYVISUALS DIGITALS
+ * 
+ * HARDENED: Every function wrapped in try/catch
+ * so one crash never takes down the whole bot.
  */
 
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 const { askGroq, looksLikeCode } = require("./ai");
 
-// ─── Load JSON Data Files ─────────────────────────────────────────────────────
+// ─── Safe JSON Loader ─────────────────────────────────────────────────────────
 function loadJSON(filename) {
   try {
     const filePath = path.join(__dirname, filename);
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const raw      = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(raw);
   } catch (err) {
-    console.error(`[Commands] Failed to load ${filename}:`, err.message);
+    console.error(`[Commands] ❌ Failed to load ${filename}:`, err.message);
     return null;
   }
 }
 
-// ─── Developer Credit Triggers ────────────────────────────────────────────────
+// ─── Developer Credit ─────────────────────────────────────────────────────────
 const CREDIT_TRIGGERS = [
-  "who developed you",
-  "who created you",
-  "who made you",
-  "who built you",
-  "your developer",
-  "your creator",
-  "who is your creator",
-  "who programmed you",
+  "who developed you", "who created you", "who made you",
+  "who built you", "your developer", "your creator",
+  "who programmed you", "who is your maker",
 ];
 
-/**
- * Check if a message is asking about the bot's developer
- * @param {string} text
- * @returns {boolean}
- */
 function isAskingAboutDeveloper(text) {
-  const lower = text.toLowerCase();
-  return CREDIT_TRIGGERS.some((trigger) => lower.includes(trigger));
-}
-
-// ─── Command Handlers ─────────────────────────────────────────────────────────
-
-/**
- * !rules — Display group rules
- * @returns {string}
- */
-function handleRules() {
-  const data = loadJSON("rules.json");
-  if (!data) return "❌ Could not load rules. Please contact an admin.";
-
-  let msg = `📋 *Algivix Dev Team — Group Rules*\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-  data.rules.forEach((rule) => {
-    msg += `${rule}\n`;
-  });
-  msg += `\n✅ Follow these rules to keep our community professional and productive!`;
-  return msg;
-}
-
-/**
- * !task — Display current development tasks
- * @returns {string}
- */
-function handleTask() {
-  const data = loadJSON("tasks.json");
-  if (!data) return "❌ Could not load tasks. Please contact an admin.";
-
-  const priorityEmoji = { high: "🔴", medium: "🟡", low: "🟢" };
-  const statusEmoji = { pending: "⏳", "in-progress": "🔄", done: "✅" };
-
-  let msg = `📌 *Sprint Tasks — Algivix Dev Team*\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `🎯 *Weekly Goal:* ${data.weeklyGoal}\n\n`;
-
-  data.tasks.forEach((task, index) => {
-    const priority = priorityEmoji[task.priority] || "⚪";
-    const status = statusEmoji[task.status] || "❓";
-    msg += `${priority} *Task ${index + 1}: ${task.title}*\n`;
-    msg += `   ${task.description}\n`;
-    msg += `   👤 Assigned: ${task.assignedTo} | ${status} ${task.status} | 📅 Due: ${task.deadline}\n\n`;
-  });
-
-  msg += `💪 Let's crush these tasks! Use *!ai* for help with any task.`;
-  return msg;
-}
-
-/**
- * !announce <message> — Post an announcement (admin only)
- * @param {string} message - The announcement content
- * @param {boolean} isAdmin - Whether the sender is an admin
- * @returns {string}
- */
-function handleAnnounce(message, isAdmin) {
-  if (!isAdmin) {
-    return "🔒 Only group admins can make announcements.";
-  }
-  if (!message || message.trim().length === 0) {
-    return '⚠️ Please provide a message. Usage: *!announce Your message here*';
-  }
-
-  const now = new Date().toLocaleString("en-US", {
-    timeZone: "Africa/Lagos",
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-
-  return (
-    `📢 *ANNOUNCEMENT — Algivix Dev Team*\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `${message.trim()}\n\n` +
-    `🕐 Posted: ${now}\n` +
-    `— AlgivixAI Bot`
-  );
-}
-
-/**
- * !ai <question> — Ask the AI a development question
- * @param {string} question - The user's question
- * @returns {Promise<string>}
- */
-async function handleAI(question) {
-  if (!question || question.trim().length === 0) {
-    return '⚠️ Please provide a question. Usage: *!ai How do I center a div in CSS?*';
-  }
-
-  // Auto-detect code for better AI context
-  const context = looksLikeCode(question) ? "code_review" : "general";
-  const thinking = "🤖 *AlgivixAI is thinking...*\n";
-
   try {
-    const response = await askGroq(question.trim(), context);
-    return `🤖 *AlgivixAI:*\n${response}`;
-  } catch (err) {
-    console.error("[Commands] AI handler error:", err.message);
-    return "🚨 AI encountered an error. Please try again.";
-  }
+    const lower = text.toLowerCase();
+    return CREDIT_TRIGGERS.some(t => lower.includes(t));
+  } catch { return false; }
 }
 
-/**
- * !review <code> — Review a code snippet
- * @param {string} code - The code to review
- * @returns {Promise<string>}
- */
-async function handleReview(code) {
-  if (!code || code.trim().length === 0) {
-    return (
-      '⚠️ Please provide code to review.\n' +
-      'Usage: *!review* followed by your code snippet.'
-    );
-  }
-
-  try {
-    const response = await askGroq(code.trim(), "code_review");
-    return `🔍 *Code Review by AlgivixAI:*\n${response}`;
-  } catch (err) {
-    console.error("[Commands] Review handler error:", err.message);
-    return "🚨 Code review failed. Please try again.";
-  }
-}
-
-/**
- * Developer credit response
- * @returns {string}
- */
 function handleDeveloperCredit() {
   return (
     `👨‍💻 *About AlgivixAI*\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `I was developed by:\n\n` +
     `🚀 *EMEMZYVISUALS DIGITALS*\n` +
-    `A talented and AI automation developer\n\n` +
+    `A talented AI automation developer\n\n` +
     `Built with ❤️ for the Algivix Dev Team.\n` +
     `Powered by Groq AI + Baileys WhatsApp SDK.`
   );
 }
 
-/**
- * !help — Show available commands
- * @returns {string}
- */
+// ─── !help ────────────────────────────────────────────────────────────────────
 function handleHelp() {
-  return (
-    `🤖 *AlgivixAI — Command Guide*\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `*!ai <question>* — Ask AI a dev question\n` +
-    `*!review <code>* — Get AI code review\n` +
-    `*!task* — View current sprint tasks\n` +
-    `*!rules* — View group rules\n` +
-    `*!announce <msg>* — Post announcement (admin)\n` +
-    `*!help* — Show this guide\n\n` +
-    `💡 Tip: You can also just ask me anything like:\n` +
-    `"Who developed you?" or paste code for review!`
-  );
+  try {
+    return (
+      `🤖 *AlgivixAI — Command Guide*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `*!ai <question>* — Ask AI anything dev-related\n` +
+      `*!review <code>* — Get AI code review\n` +
+      `*!task* — View current sprint tasks\n` +
+      `*!rules* — View group rules\n` +
+      `*!announce <msg>* — Post announcement (admin)\n` +
+      `*!help* — Show this guide\n\n` +
+      `💡 Also try: "Who developed you?"\n` +
+      `📢 Admins: DM me *!broadcast <msg>* to post from anywhere!`
+    );
+  } catch (err) {
+    console.error("[handleHelp]", err.message);
+    return "❓ Help is temporarily unavailable.";
+  }
 }
 
-/**
- * Main command dispatcher — routes messages to the correct handler
- * @param {string} text - Raw message text
- * @param {boolean} isAdmin - Whether sender is a group admin
- * @returns {Promise<string|null>} - Response string or null (ignore message)
- */
+// ─── !rules ───────────────────────────────────────────────────────────────────
+function handleRules() {
+  try {
+    const data = loadJSON("rules.json");
+    if (!data || !data.rules) return "❌ Rules not available. Please contact an admin.";
+
+    let msg = `📋 *Algivix Dev Team — Group Rules*\n━━━━━━━━━━━━━━━━━━━━\n`;
+    data.rules.forEach(rule => { msg += `${rule}\n`; });
+    msg += `\n✅ Follow these rules to keep our community great!`;
+    return msg;
+  } catch (err) {
+    console.error("[handleRules]", err.message);
+    return "❌ Could not load rules right now.";
+  }
+}
+
+// ─── !task ────────────────────────────────────────────────────────────────────
+function handleTask() {
+  try {
+    const data = loadJSON("tasks.json");
+    if (!data || !data.tasks) return "❌ Tasks not available. Please contact an admin.";
+
+    const priorityEmoji = { high: "🔴", medium: "🟡", low: "🟢" };
+    const statusEmoji   = { pending: "⏳", "in-progress": "🔄", done: "✅" };
+
+    let msg = `📌 *Sprint Tasks — Algivix Dev Team*\n━━━━━━━━━━━━━━━━━━━━\n`;
+    msg    += `🎯 *Goal:* ${data.weeklyGoal}\n\n`;
+
+    data.tasks.forEach((task, i) => {
+      const p = priorityEmoji[task.priority] || "⚪";
+      const s = statusEmoji[task.status]     || "❓";
+      msg += `${p} *${i + 1}. ${task.title}*\n`;
+      msg += `   ${task.description}\n`;
+      msg += `   👤 ${task.assignedTo} | ${s} ${task.status} | 📅 ${task.deadline}\n\n`;
+    });
+
+    msg += `💪 Use *!ai <question>* if you need help with any task!`;
+    return msg;
+  } catch (err) {
+    console.error("[handleTask]", err.message);
+    return "❌ Could not load tasks right now.";
+  }
+}
+
+// ─── !announce ────────────────────────────────────────────────────────────────
+function handleAnnounce(message, isAdmin) {
+  try {
+    if (!isAdmin) return "🔒 Only group admins can make announcements.";
+    if (!message || !message.trim()) return "⚠️ Usage: *!announce Your message here*";
+
+    const now = new Date().toLocaleString("en-US", {
+      timeZone: "Africa/Lagos",
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    return (
+      `📢 *ANNOUNCEMENT — Algivix Dev Team*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `${message.trim()}\n\n` +
+      `🕐 ${now}\n— AlgivixAI`
+    );
+  } catch (err) {
+    console.error("[handleAnnounce]", err.message);
+    return "❌ Could not post announcement. Try again.";
+  }
+}
+
+// ─── !ai ──────────────────────────────────────────────────────────────────────
+async function handleAI(question) {
+  try {
+    if (!question || !question.trim()) {
+      return "⚠️ Usage: *!ai <your question>*\nExample: *!ai How do I reverse a string in JS?*";
+    }
+
+    const context  = looksLikeCode(question) ? "code_review" : "general";
+    console.log(`[!ai] Processing question (context: ${context}): ${question.slice(0, 60)}...`);
+
+    const response = await askGroq(question.trim(), context);
+    return `🤖 *AlgivixAI:*\n\n${response}`;
+
+  } catch (err) {
+    console.error("[handleAI] Unexpected error:", err.message);
+    return "🚨 Something went wrong with AI. Please try again in a moment.";
+  }
+}
+
+// ─── !review ──────────────────────────────────────────────────────────────────
+async function handleReview(code) {
+  try {
+    if (!code || !code.trim()) {
+      return "⚠️ Usage: *!review <your code here>*\nPaste your code after the command.";
+    }
+
+    console.log(`[!review] Reviewing code snippet (${code.length} chars)...`);
+    const response = await askGroq(code.trim(), "code_review");
+    return `🔍 *Code Review by AlgivixAI:*\n\n${response}`;
+
+  } catch (err) {
+    console.error("[handleReview] Unexpected error:", err.message);
+    return "🚨 Code review failed. Please try again.";
+  }
+}
+
+// ─── Main Command Router ──────────────────────────────────────────────────────
 async function processCommand(text, isAdmin = false) {
-  const trimmed = text.trim();
-  const lower = trimmed.toLowerCase();
+  try {
+    if (!text || !text.trim()) return null;
 
-  // ── Developer credit check (natural language) ───────────────────────────────
-  if (isAskingAboutDeveloper(lower)) {
-    return handleDeveloperCredit();
-  }
+    const trimmed = text.trim();
+    const lower   = trimmed.toLowerCase();
 
-  // ── Command prefix check ────────────────────────────────────────────────────
-  if (!trimmed.startsWith("!")) {
-    return null; // Not a command — ignore
-  }
+    // Natural language: developer credit
+    if (isAskingAboutDeveloper(lower)) return handleDeveloperCredit();
 
-  // Parse command and arguments
-  const spaceIndex = trimmed.indexOf(" ");
-  const command = (spaceIndex > -1 ? trimmed.substring(0, spaceIndex) : trimmed).toLowerCase();
-  const args = spaceIndex > -1 ? trimmed.substring(spaceIndex + 1).trim() : "";
+    // Must start with ! to be a command
+    if (!trimmed.startsWith("!")) return null;
 
-  // ── Route to handler ────────────────────────────────────────────────────────
-  switch (command) {
-    case "!ai":
-      return await handleAI(args);
+    // Split command and arguments
+    const spaceIdx = trimmed.indexOf(" ");
+    const command  = (spaceIdx > -1 ? trimmed.slice(0, spaceIdx) : trimmed).toLowerCase();
+    const args     = spaceIdx > -1 ? trimmed.slice(spaceIdx + 1).trim() : "";
 
-    case "!review":
-      return await handleReview(args);
+    console.log(`[CMD] "${command}" | admin: ${isAdmin} | args: "${args.slice(0, 40)}"`);
 
-    case "!task":
-    case "!tasks":
-      return handleTask();
+    switch (command) {
+      case "!ai":       return await handleAI(args);
+      case "!review":   return await handleReview(args);
+      case "!task":
+      case "!tasks":    return handleTask();
+      case "!rules":    return handleRules();
+      case "!announce": return handleAnnounce(args, isAdmin);
+      case "!help":
+      case "!start":    return handleHelp();
+      default:          return null; // Unknown — ignore silently
+    }
 
-    case "!rules":
-      return handleRules();
-
-    case "!announce":
-      return handleAnnounce(args, isAdmin);
-
-    case "!help":
-    case "!start":
-      return handleHelp();
-
-    default:
-      return null; // Unknown command — ignore silently
+  } catch (err) {
+    // Top-level safety net — bot NEVER crashes from a bad command
+    console.error("[processCommand] Fatal error caught safely:", err.message);
+    return "⚠️ Something went wrong. Please try again.";
   }
 }
 
@@ -253,6 +218,6 @@ module.exports = {
   handleRules,
   handleTask,
   handleHelp,
-  isAskingAboutDeveloper,
   handleDeveloperCredit,
+  isAskingAboutDeveloper,
 };
