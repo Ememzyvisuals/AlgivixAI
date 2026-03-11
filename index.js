@@ -100,13 +100,38 @@ function tagMember(jid) {
   return `@${normalizeJid(jid)}`;
 }
 
-// ─── Send Message ─────────────────────────────────────────────────────────────
-async function sendMsg(jid, text, mentions = []) {
+// ─── Human-like Delay ────────────────────────────────────────────────────────
+// Simulates human typing speed — makes bot undetectable to WhatsApp
+async function humanDelay(text = "") {
+  // Base delay: 1-3 seconds
+  const base    = 1000 + Math.random() * 2000;
+  // Extra delay based on message length (like typing speed)
+  const typing  = Math.min(text.length * 15, 3000);
+  const total   = base + typing;
+  await new Promise(r => setTimeout(r, total));
+}
+
+// ─── Typing Indicator ─────────────────────────────────────────────────────────
+async function sendWithTyping(jid, text, mentions = []) {
   try {
+    // Show "typing..." indicator
+    await sock.sendPresenceUpdate("composing", jid);
+    // Wait realistic typing time
+    await humanDelay(text);
+    // Stop typing
+    await sock.sendPresenceUpdate("paused", jid);
+    // Send message
     await sock.sendMessage(jid, { text, mentions });
   } catch (e) {
     console.error("[sendMsg]", e.message);
+    // Fallback without typing indicator
+    try { await sock.sendMessage(jid, { text, mentions }); } catch {}
   }
+}
+
+// ─── Send Message ─────────────────────────────────────────────────────────────
+async function sendMsg(jid, text, mentions = []) {
+  await sendWithTyping(jid, text, mentions);
 }
 
 // ─── Send with mention tags ───────────────────────────────────────────────────
@@ -465,7 +490,7 @@ async function onMessage(msg) {
 
     const text = (
       mc.conversation                                  ||
-      mc.extendedTextMessage?.text                     ||
+          mc.extendedTextMessage?.text                     ||
       mc.imageMessage?.caption                         ||
       mc.videoMessage?.caption                         ||
       ""
@@ -729,6 +754,13 @@ async function connect() {
     },
     printQRInTerminal: false,
     browser:           ["Ubuntu", "Chrome", "20.0.04"],
+    // ── Anti-ban settings ──────────────────────────────────────────────────
+    connectTimeoutMs:        60000,
+    defaultQueryTimeoutMs:   60000,
+    keepAliveIntervalMs:     25000,
+    emitOwnEvents:           false,
+    fireInitQueries:         true,
+    generateHighQualityLinkPreview: false,
     getMessage: async (key) => {
       const cached = msgRetryCache.get(key.id);
       if (cached) return cached;
@@ -765,6 +797,18 @@ async function connect() {
 
     if (connection === "open") {
       const myPhone = sock.user?.id?.split(":")[0];
+
+      // ── Simulate human online presence ───────────────────────────────────
+      // Go online like a real person
+      await sock.sendPresenceUpdate("available");
+      // Randomly go "unavailable" every few hours to look human
+      setInterval(async () => {
+        try {
+          const isOnline = Math.random() > 0.3; // 70% chance online
+          await sock.sendPresenceUpdate(isOnline ? "available" : "unavailable");
+        } catch {}
+      }, (30 + Math.random() * 60) * 60 * 1000); // every 30-90 mins
+
       console.log(`\n✅ ${fmt("AlgivixAI ONLINE")} — Fully Autonomous!`);
       console.log(`📱 Connected as: ${myPhone}`);
       console.log(`👑 Developer: ${DEVELOPER_NUM || "not set"}`);
@@ -794,7 +838,13 @@ async function connect() {
       if (msg.key?.id) msgRetryCache.set(msg.key.id, msg.message);
     }
     if (type !== "notify") return;
-    for (const msg of messages) await onMessage(msg);
+    for (const msg of messages) {
+      // Mark message as read (blue ticks) — looks human
+      try {
+        await sock.readMessages([msg.key]);
+      } catch {}
+      await onMessage(msg);
+    }
   });
 
   sock.ev.on("group-participants.update", onGroupUpdate);
