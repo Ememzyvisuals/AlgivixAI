@@ -74,10 +74,26 @@ async function sendMsg(jid, text) {
 async function isAdmin(groupJid, senderJid) {
   try {
     const m = await sock.groupMetadata(groupJid);
-    return m.participants.some(
-      p => p.id === senderJid && (p.admin === "admin" || p.admin === "superadmin")
-    );
-  } catch { return false; }
+
+    // Normalize JID for comparison — handle @s.whatsapp.net, @lid, @c.us formats
+    const normalizeJid = (jid) => (jid || "").split("@")[0].split(":")[0];
+    const senderPhone  = normalizeJid(senderJid);
+
+    // Also check ADMIN_NUMBERS env variable as fallback
+    if (ADMIN_NUMBERS.includes(senderPhone)) return true;
+
+    return m.participants.some(p => {
+      const participantPhone = normalizeJid(p.id);
+      const isMatch          = participantPhone === senderPhone || p.id === senderJid;
+      const isAdminRole      = p.admin === "admin" || p.admin === "superadmin";
+      return isMatch && isAdminRole;
+    });
+  } catch (e) {
+    console.error("[isAdmin] Error:", e.message);
+    // Fallback: check ADMIN_NUMBERS if group metadata fails
+    const phone = (senderJid || "").split("@")[0].split(":")[0];
+    return ADMIN_NUMBERS.includes(phone);
+  }
 }
 
 async function getAdmins(groupJid) {
@@ -510,4 +526,4 @@ connect().catch(err => { console.error("[Fatal]", err); process.exit(1); });
 
 process.on("SIGINT",             () => { console.log("\nShutting down..."); process.exit(0); });
 process.on("uncaughtException",  e  => console.error("[Uncaught]", e.message));
-process.on("unhandledRejection", r  => console.error("[Unhandled]", r));
+process.on("unhandledRejection", r  => console.error("[Unhandled]",r));
