@@ -1,0 +1,33 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "AlgivixAI Bot v5",
+      "description": "Build and deploy the full v5 of AlgivixAI with vision, memory, NLP commands and human personality.",
+      "assignedTo": "EMEMZYVISUALS",
+      "priority": "high",
+      "deadline": "2026-03-15",
+      "status": "in-progress"
+    },
+    {
+      "id": 2,
+      "title": "Group Feature Testing",
+      "description": "Test all bot features in the Algivix Dev Team group — trivia, roast, meetings, reports.",
+      "assignedTo": "all",
+      "priority": "medium",
+      "deadline": "2026-03-16",
+      "status": "in-progress"
+    },
+    {
+      "id": 3,
+      "title": "Client Project Delivery",
+      "description": "Complete and deliver current client project on schedule.",
+      "assignedTo": "all",
+      "priority": "high",
+      "deadline": "2026-03-20",
+      "status": "pending"
+    }
+  ],
+  "weeklyGoal": "Ship AlgivixAI v5 fully tested and deploy to production. Keep the team active and engaged.",
+  "lastUpdated": "2026-03-12"
+}
