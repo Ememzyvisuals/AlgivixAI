@@ -358,7 +358,7 @@ async function generateImage(prompt, requestedBy = "boss") {
 
     const { status, body } = await httpsPost(
       "generativelanguage.googleapis.com",
-      `/v1beta/models/gemini-2.0-flash:generateContent?key=${KEY}`,
+      `/v1beta/models/gemini-2.5-flash-image:generateContent?key=${KEY}`,
       bodyObj,
       {},
       90000
@@ -441,7 +441,7 @@ async function editImage(base64Image, editInstruction, requestedBy = "boss") {
 
     const { status, body } = await httpsPost(
       "generativelanguage.googleapis.com",
-      `/v1beta/models/gemini-2.0-flash:generateContent?key=${KEY}`,
+      `/v1beta/models/gemini-2.5-flash-image:generateContent?key=${KEY}`,
       bodyObj,
       {},
       90000
